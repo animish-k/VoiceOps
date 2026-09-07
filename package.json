@@ -7,10 +7,14 @@
   ],
   "scripts": {
     "dev:web": "npm --workspace=@voiceops/web run dev",
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "test:unit": "npm --workspace=@voiceops/shared run test"
+    "build": "npm run build --workspaces --if-present && tsc",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit",
+    "test": "npm run build && node --test dist/tests/**/*.test.js",
+    "test:unit": "npm --workspace=@voiceops/shared run test && npm --workspace=@voiceops/agent run test && npm run build && node --test dist/tests/data/*.test.js dist/tests/state/*.test.js",
+    "test:interruption": "npm run build && node --test dist/tests/interruption/*.test.js",
+    "test:stress": "npm run build && node --test dist/tests/interruption/stress.test.js",
+    "test:contracts": "npm run build && node --test dist/tests/contracts/*.test.js",
+    "test:e2e": "npm run build && node --test dist/tests/e2e/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
