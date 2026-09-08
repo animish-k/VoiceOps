@@ -16,14 +16,18 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test dist/**/*.test.js"
+    "test": "npm run build && node --test dist/**/*.test.js",
+    "start:worker": "node dist/realtime/worker.js start",
+    "dev:worker": "node dist/realtime/worker.js dev",
+    "dev:server": "node -e \"import('./dist/realtime/server.js').then(m => m.startTokenServer(parseInt(process.env.PORT||'3001')))\""
   },
   "dependencies": {
     "@livekit/agents": "^1.8.0",
     "@livekit/agents-plugin-rime": "^1.8.0",
     "@livekit/rtc-node": "^0.13.34",
     "@voiceops/shared": "*",
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.2",
+    "livekit-server-sdk": "^2.9.8"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

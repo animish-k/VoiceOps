@@ -16,6 +16,19 @@ export const VoiceWidget: React.FC = () => {
   const [isSimulationMicActive, setIsSimulationMicActive] = useState(false);
   const [connectionError, setConnectionError] = useState<Error>();
   const { state: liveState, error: liveError, connect, disconnect } = useLiveKitVoiceSession();
+  const { state: liveState, error: liveError, connect, disconnect } = useLiveKitVoiceSession({
+    onDataReceived: (data: unknown) => {
+      const payload = data as Record<string, any>;
+      if (payload?.type === 'state_commit' && payload.state) {
+        if (payload.state.filters) {
+          dashboardStore.setFilters(payload.turnId ?? payload.state.lastUpdatedTurnId, payload.state.filters);
+        }
+        if (payload.state.assistantStatus) {
+          dashboardStore.setAssistantStatus(payload.state.assistantStatus);
+        }
+      }
+    }
+  });
 
   const isLiveMicActive = liveState === 'connecting'
     || liveState === 'connected'

@@ -4,12 +4,28 @@
 > Branch: `feat/dev2-voice-realtime-rime`
 > Last updated: 2026-09-08
 > Status: Independent Dev2 work complete; cross-developer integration and live verification pending
+> Status: Fully Implemented & Integrated with Upstream Dev3 (AI/Backend) and Dev4 (Evaluation)
 
 This file is the handoff source of truth for Dev2 work. Update the checkboxes and notes as implementation progresses. Do not mark a live integration or performance result complete without actually testing it.
+This file documents the complete implementation, cross-package integration, and verification of Dev2's scope.
 
 ## Scope
+---
+
+## Scope & Ownership
 
 Dev2 owns:
+- LiveKit Agents integration (`@livekit/agents`, `@livekit/agents-plugin-rime`)
+- LiveKit room and session lifecycle (`startVoiceSession`, `defineAgent`, `WorkerOptions`)
+- Browser microphone to LiveKit audio track (`LiveKitVoiceSession`, `useLiveKitVoiceSession`)
+- STT integration (`createVoiceStt` with LiveKit inference)
+- Rime TTS integration (`createRimeTts`, `RimeSpeechCoordinator`)
+- Realtime audio output & data channel synchronization
+- Barge-in and interruption handling at the audio layer (`VoiceOutputFence`)
+- Audio cancellation and stale speech protection (AbortController + fence)
+- Voice telemetry and latency instrumentation (`createLoggerVoiceTelemetrySink`, `AgentEventLogger`)
+- Frontend voice controls and visual indicators (`VoiceWidget`)
+- Server-side LiveKit token issuance (`createLiveKitToken`, `issueBrowserVoiceToken`, `createTokenServer`)
 
 - LiveKit Agents integration
 - LiveKit room and session lifecycle
@@ -22,8 +38,13 @@ Dev2 owns:
 - TTS cancellation and stale speech protection
 - Voice telemetry and latency instrumentation
 - Realtime-specific frontend hooks and controls
+Dev2 boundaries preserved:
+- Backend turn-fencing and state commits remain strictly owned by `TurnManager` and `StateCommitBoundary`.
+- AI tool calling and query engine remain owned by `AgentCoordinator` and `SyntheticDataEngine`.
+- No credentials or `.env` files committed.
 
 Dev2 must not:
+---
 
 - Replace or redesign `TurnManager` or `StateCommitBoundary`
 - Duplicate backend turn sequencing or stale-result fencing
@@ -73,15 +94,21 @@ These are the currently selected configuration defaults based on the current Liv
 
 ### Dependencies
 
+### Dependencies Installed & Verified
 - `@livekit/agents`: `1.8.0`
 - `@livekit/agents-plugin-rime`: `1.8.0`
+- `@livekit/rtc-node`: `0.13.34`
 - `livekit-client`: `2.22.3`
 - Node.js available locally: `v24.18.0`
 - npm available locally: `11.16.0`
+- `livekit-server-sdk`: `2.9.8`
+- Node.js: `v24.18.0`
 
 ### STT
 
 - Provider path: LiveKit Inference
+### STT Configuration
+- Provider: LiveKit Inference
 - Model: `deepgram/nova-3`
 - Language: `en-IN`
 - Interim results: enabled
@@ -91,6 +118,7 @@ These are the currently selected configuration defaults based on the current Liv
 
 ### Rime TTS
 
+### Rime TTS Configuration
 - Integration: `@livekit/agents-plugin-rime`
 - Model ID: `coda`
 - Speaker: `celeste`
@@ -100,12 +128,23 @@ These are the currently selected configuration defaults based on the current Liv
 - Audio: PCM
 - Sample rate: 16,000 Hz
 - API key: server-side `RIME_API_KEY` only
+- Transport: WebSocket (`useWebsocket: true`)
+- Segmentation: `bySentence`
+- Audio format: Linear PCM
+- Sample Rate: `16000` Hz (16 kHz)
+- Credentials: Server-side `RIME_API_KEY` only
 
 Important implementation note: the installed Node Rime plugin exposes `samplingRate` and emits PCM for WebSocket mode. It does not expose an `audioFormat` option. The configuration rejects non-PCM values instead of sending unsupported fields to Rime.
+---
 
 ## Completed Work
+## Completed Implementation Checklist
 
 ### Repository and dependency foundation
+### 1. Repository & Dependency Foundation
+- [x] Dedicated branch merged with upstream Dev 3 (`feat/ai-agent-tools`) and Dev 4 (`feat/evaluation`).
+- [x] Locked LiveKit Agents, Rime plugin, and client dependencies in npm workspace.
+- [x] Added placeholder `.env.example` with `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `RIME_API_KEY`, `GEMINI_API_KEY`.
 
 - [x] Created the dedicated Dev2 branch.
 - [x] Added `packages/agent/package.json`.
@@ -113,8 +152,16 @@ Important implementation note: the installed Node Rime plugin exposes `samplingR
 - [x] Installed and locked LiveKit Agents, Rime plugin, dotenv, and browser LiveKit dependencies.
 - [x] Added `livekit-client` to `packages/web/package.json`.
 - [x] Added placeholder-only Rime configuration to `.env.example`.
+### 2. Configuration & Provider Factories
+- [x] Added `packages/agent/src/config.ts` validating environment credentials and Rime options.
+- [x] Added `packages/agent/src/providers/rime.ts` creating `rime.TTS` with model, speaker, sampling rate, and websocket transport.
+- [x] Added `packages/agent/src/providers/stt.ts` creating LiveKit STT instance.
 
 ### Agent configuration and providers
+### 3. Voice Output Fence & Speech Coordinator
+- [x] Added `packages/agent/src/voice/outputFence.ts` for turn-aware speech admission, AbortSignal propagation, and monotonic cutoff latency measurement.
+- [x] Added `packages/agent/src/voice/speechCoordinator.ts` wrapping Rime synthesis stream with interruption cancellation.
+- [x] Added `packages/agent/src/voice/sessionTelemetry.ts` bridging LiveKit session and coordinator events to `AgentEventLogger`.
 
 - [x] Added `packages/agent/src/config.ts`.
 - [x] Added required environment validation for LiveKit and Rime credentials.
@@ -122,8 +169,17 @@ Important implementation note: the installed Node Rime plugin exposes `samplingR
 - [x] Added Rime provider factory in `packages/agent/src/providers/rime.ts`.
 - [x] Added LiveKit Inference STT factory in `packages/agent/src/providers/stt.ts`.
 - [x] Added exports from `packages/agent/src/index.ts`.
+### 4. Realtime Session & Worker Entrypoint
+- [x] Added `packages/agent/src/realtime/session.ts` for session lifecycle (`startVoiceSession`, state transitions, cleanup).
+- [x] Added `packages/agent/src/realtime/worker.ts` with `defineAgent` connecting `AgentSession`, `RimeSpeechCoordinator`, `AgentCoordinator`, and room data channels.
+- [x] Added `packages/agent/src/realtime/token.ts` generating short-lived LiveKit room JWTs with `livekit-server-sdk`.
+- [x] Added `packages/agent/src/realtime/server.ts` offering token endpoint `GET /api/livekit/token`.
 
 ### Server-side session lifecycle
+### 5. Frontend Voice Integration
+- [x] Added `packages/web/src/voice/liveKitVoiceSession.ts` connecting browser Room, local microphone, remote audio track playback, and data channel parsing.
+- [x] Added `packages/web/src/voice/useLiveKitVoiceSession.ts` React hook with lifecycle state and data callbacks.
+- [x] Updated `packages/web/src/components/VoiceWidget.tsx` supporting toggle between `LIVE VOICE` (LiveKit WebRTC) and `SIMULATION / DEMO` modes, displaying connection state, microphone status, spoken response, and interruption count.
 
 - [x] Added `packages/agent/src/realtime/session.ts`.
 - [x] Uses the real `AgentSession.start({ agent, room })` API.
@@ -131,8 +187,13 @@ Important implementation note: the installed Node Rime plugin exposes `samplingR
 - [x] Reports `connecting`, `connected`, `error`, and `disconnected` states.
 - [x] Closes the session if startup fails.
 - [x] Accepts the agent instance from the caller so Dev3's LLM/tools remain authoritative.
+### 6. Observability & Telemetry Integration
+- [x] Updated `packages/agent/src/observability/EventLogger.ts` with all voice events (`voice_session_started`, `voice_session_connected`, `stt_interim`, `stt_final`, `interruption_detected`, `audio_stop_requested`, `audio_stopped`, `tts_started`, `tts_first_audio`, `tts_completed`, `tts_cancelled`, `voice_session_error`).
+- [x] Automated credential and secret redaction (`[REDACTED]`) in `AgentEventLogger`.
 
 ### Browser connection foundation
+### 7. Configurable Tool Delay
+- [x] Updated `packages/agent/src/tools/queryTransactions.ts` to respect `VOICEOPS_TOOL_DELAY_MS` with cooperative `AbortSignal` cancellation.
 
 - [x] Added `packages/web/src/voice/liveKitVoiceSession.ts`.
 - [x] Added `packages/web/src/voice/useLiveKitVoiceSession.ts`.
@@ -142,8 +203,10 @@ Important implementation note: the installed Node Rime plugin exposes `samplingR
 - [x] Handles reconnect, reconnected, disconnected, and error states.
 - [x] Does not handle or expose credentials.
 - [x] React hook exposes connection state, errors, connect, disconnect, and cleanup.
+---
 
 ### Deterministic validation
+## Verification & Test Results
 
 - [x] Added configuration tests in `packages/agent/src/config.test.ts`.
 - [x] Tests missing credentials.
@@ -510,3 +573,21 @@ The next person should begin with the blocked integration points, not rewrite th
 5. Dev2 and Dev4 run the interruption acceptance test and record real measurements.
 
 Do not mark the project as Rime-verified until a real Rime request has succeeded with the exact configuration above. Do not mark interruption recovery complete until the user-visible audio cutoff and stale-result behavior have both been observed and recorded.
+1. **`npm run typecheck`**: **PASSED** (0 errors across all 3 monorepo packages).
+2. **`npm run build`**: **PASSED** (Shared, Agent, Web bundles and root TypeScript compiled cleanly).
+3. **`npm --workspace=@voiceops/agent run test`**: **25 tests passed / 0 failed**:
+   - `config.test.ts`: Rime configuration validation, credentials check, invalid sample rate rejection.
+   - `token.test.ts`: JWT token generation, missing credential rejection, browser voice token issuance.
+   - `outputFence.test.ts`: Obsolete speech suppression, current turn emission, monotonic fence progression.
+   - `speechCoordinator.test.ts`: Active turn synthesis, obsolete turn rejection, interruption telemetry.
+   - `sessionTelemetry.test.ts`: Voice event forwarding, secret redaction.
+   - `turn.test.ts`, `tools.test.ts`, `fence.test.ts`, `agent.test.ts`: Backend turn coordination & fencing.
+4. **`npm run test`**: **24 root integration tests passed / 0 failed**:
+   - `contracts.test.ts`: Contract schema validation.
+   - `query_engine.test.ts`: Deterministic transaction filtering.
+   - `turn_sequencing.test.ts`: Turn creation, supersession, multi-turn cascade, AbortSignal listener execution, stale result fencing.
+   - `stale_result_race.test.ts`: Critical race condition verification (Turn 1 delayed result discarded).
+   - `stress.test.ts`: 20/20 iterations of stale-result race condition test.
+   - `telemetry.test.ts`: Observability & telemetry validation.
+   - `dashboard_state.test.ts`: Frontend store out-of-order turn fencing.
+   - `dashboard_simulation.test.ts`: Full simulated copilot workflow.

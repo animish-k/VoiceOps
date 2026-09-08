@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BrowserVoiceSessionOptions,
   BrowserVoiceSessionState,
+  BrowserVoiceSessionCallbacks,
   LiveKitVoiceSession
 } from './liveKitVoiceSession.js';
 
@@ -13,6 +14,9 @@ export interface UseLiveKitVoiceSessionResult {
 }
 
 export function useLiveKitVoiceSession(): UseLiveKitVoiceSessionResult {
+export function useLiveKitVoiceSession(
+  callbacks: Pick<BrowserVoiceSessionCallbacks, 'onDataReceived'> = {}
+): UseLiveKitVoiceSessionResult {
   const [state, setState] = useState<BrowserVoiceSessionState>('disconnected');
   const [error, setError] = useState<Error>();
   const sessionRef = useRef<LiveKitVoiceSession | null>(null);
@@ -21,6 +25,10 @@ export function useLiveKitVoiceSession(): UseLiveKitVoiceSessionResult {
     sessionRef.current = new LiveKitVoiceSession({
       onStateChange: setState,
       onError: setError
+      onError: setError,
+      onDataReceived: (data) => {
+        callbacks.onDataReceived?.(data);
+      }
     });
   }
 

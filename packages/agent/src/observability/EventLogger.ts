@@ -7,6 +7,21 @@ export type AgentEventType =
   | 'stale_result_discarded'
   | 'state_commit'
   | 'response_generated';
+  | 'response_generated'
+  | 'voice_session_started'
+  | 'voice_session_connected'
+  | 'voice_session_disconnected'
+  | 'voice_session_state'
+  | 'voice_session_error'
+  | 'stt_interim'
+  | 'stt_final'
+  | 'interruption_detected'
+  | 'audio_stop_requested'
+  | 'audio_stopped'
+  | 'tts_started'
+  | 'tts_first_audio'
+  | 'tts_completed'
+  | 'tts_cancelled';
 
 export interface BaseAgentEvent {
   type: AgentEventType;
@@ -66,6 +81,46 @@ export interface ResponseGeneratedEvent extends BaseAgentEvent {
   durationMs?: number;
 }
 
+export interface VoiceSessionEvent extends BaseAgentEvent {
+  type:
+    | 'voice_session_started'
+    | 'voice_session_connected'
+    | 'voice_session_disconnected'
+    | 'voice_session_state'
+    | 'voice_session_error';
+  state?: string;
+  previousState?: string;
+  message?: string;
+  source?: string;
+}
+
+export interface SttEvent extends BaseAgentEvent {
+  type: 'stt_interim' | 'stt_final';
+  transcript: string;
+  language?: string | null;
+  durationMs?: number;
+}
+
+export interface VoiceInterruptionEvent extends BaseAgentEvent {
+  type: 'interruption_detected' | 'audio_stop_requested' | 'audio_stopped';
+  interruptionDetectedAt?: number;
+  audioStopRequestedAt?: number;
+  audioStoppedAt?: number;
+  cutoffLatencyMs?: number;
+  probability?: number;
+  detectionDelayInS?: number;
+}
+
+export interface TtsTelemetryEvent extends BaseAgentEvent {
+  type: 'tts_started' | 'tts_first_audio' | 'tts_completed' | 'tts_cancelled';
+  text?: string;
+  modelId?: string;
+  speaker?: string;
+  language?: string;
+  transport?: string;
+  durationMs?: number;
+}
+
 export type AgentEvent =
   | TurnCreatedEvent
   | TurnInterruptedEvent
@@ -75,6 +130,11 @@ export type AgentEvent =
   | StaleResultDiscardedEvent
   | StateCommitEvent
   | ResponseGeneratedEvent;
+  | ResponseGeneratedEvent
+  | VoiceSessionEvent
+  | SttEvent
+  | VoiceInterruptionEvent
+  | TtsTelemetryEvent;
 
 export type AgentEventListener = (event: AgentEvent) => void;
 
@@ -89,9 +149,13 @@ export class AgentEventLogger {
 
   public emit(event: AgentEvent): void {
     this.eventHistory.push(event);
+    // Redact any potential credentials/secrets before recording/emitting
+    const sanitized = this.sanitizeEvent(event);
+    this.eventHistory.push(sanitized);
     for (const listener of this.listeners) {
       try {
         listener(event);
+        listener(sanitized);
       } catch (err) {
         console.error('Error in agent event listener:', err);
       }
@@ -108,6 +172,17 @@ export class AgentEventLogger {
 
   public clear(): void {
     this.eventHistory = [];
+  }
+
+  private sanitizeEvent(event: AgentEvent): AgentEvent {
+    // Ensure no secrets like RIME_API_KEY or LIVEKIT_API_SECRET leak
+    const clone = { ...event } as Record<string, unknown>;
+    for (const key of ['apiKey', 'apiSecret', 'secret', 'token', 'password', 'key']) {
+      if (key in clone) {
+        clone[key] = '[REDACTED]';
+      }
+    }
+    return clone as unknown as AgentEvent;
   }
 }
 

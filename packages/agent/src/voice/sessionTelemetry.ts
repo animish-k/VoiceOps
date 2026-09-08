@@ -1,4 +1,5 @@
 import { AgentSessionEventTypes, voice } from '@livekit/agents';
+import { AgentEventLogger, AgentEvent } from '../observability/EventLogger.js';
 import { VoiceTelemetryEvent, VoiceTelemetrySink } from './speechCoordinator.js';
 
 export function attachSessionTelemetry(
@@ -59,6 +60,28 @@ export function attachSessionTelemetry(
     session.off(AgentSessionEventTypes.AgentStateChanged, onAgentState);
     session.off(AgentSessionEventTypes.OverlappingSpeech, onOverlap);
     session.off(AgentSessionEventTypes.Error, onError);
+  };
+}
+
+export function createLoggerVoiceTelemetrySink(
+  logger: AgentEventLogger,
+  getContext?: () => { turnId?: number; requestId?: string }
+): VoiceTelemetrySink {
+  return {
+    emit: (event: VoiceTelemetryEvent, payload: Record<string, unknown>) => {
+      const ctx = getContext?.() || {};
+      const turnId = typeof payload.turnId === 'number' ? payload.turnId : (ctx.turnId ?? 0);
+      const requestId = typeof payload.requestId === 'string' ? payload.requestId : (ctx.requestId ?? 'system');
+      const timestamp = (payload.createdAt as number) ?? (payload.detectedAt as number) ?? Date.now();
+
+      logger.emit({
+        type: event as any,
+        turnId,
+        requestId,
+        timestamp,
+        ...payload
+      } as AgentEvent);
+    }
   };
 }
 

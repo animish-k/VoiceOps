@@ -1,4 +1,5 @@
 import { ConnectionState, Room, RoomEvent } from 'livekit-client';
+import { ConnectionState, RemoteTrack, Room, RoomEvent, Track } from 'livekit-client';
 
 export type BrowserVoiceSessionState =
   | 'disconnected'
@@ -11,6 +12,7 @@ export type BrowserVoiceSessionState =
 export interface BrowserVoiceSessionCallbacks {
   onStateChange?: (state: BrowserVoiceSessionState) => void;
   onError?: (error: Error) => void;
+  onDataReceived?: (payload: unknown) => void;
 }
 
 export interface BrowserVoiceSessionOptions {
@@ -20,6 +22,7 @@ export interface BrowserVoiceSessionOptions {
 
 export class LiveKitVoiceSession {
   private room?: Room;
+  private attachedAudioElements: HTMLAudioElement[] = [];
   private state: BrowserVoiceSessionState = 'disconnected';
 
   constructor(private readonly callbacks: BrowserVoiceSessionCallbacks = {}) {}
@@ -35,6 +38,10 @@ export class LiveKitVoiceSession {
 
     this.transition('connecting');
     const room = new Room();
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true
+    });
     this.room = room;
     this.registerRoomEvents(room);
 
@@ -55,6 +62,17 @@ export class LiveKitVoiceSession {
   async disconnect(): Promise<void> {
     const room = this.room;
     this.room = undefined;
+
+    for (const el of this.attachedAudioElements) {
+      try {
+        el.pause();
+        el.remove();
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.attachedAudioElements = [];
+
     if (room) {
       await room.disconnect();
     }
@@ -72,6 +90,23 @@ export class LiveKitVoiceSession {
     room.on(RoomEvent.Disconnected, () => {
       this.room = undefined;
       this.transition('disconnected');
+    });
+
+    room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+      if (track.kind === Track.Kind.Audio) {
+        const audioElement = track.attach();
+        this.attachedAudioElements.push(audioElement);
+      }
+    });
+
+    room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+      try {
+        const text = new TextDecoder().decode(payload);
+        const data = JSON.parse(text);
+        this.callbacks.onDataReceived?.(data);
+      } catch {
+        // non-JSON data
+      }
     });
   }
 

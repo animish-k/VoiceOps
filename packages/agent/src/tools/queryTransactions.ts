@@ -24,7 +24,29 @@ export function executeQueryTransactions(
       return reject(new DOMException('Query aborted', 'AbortError'));
     }
 
+    const toolDelay = parseInt(process.env.VOICEOPS_TOOL_DELAY_MS || '0', 10);
+
+    const execute = () => {
+      if (signal?.aborted) {
+        return reject(new DOMException('Query aborted', 'AbortError'));
+      }
+      try {
+        const { transactions, totalMatching, metrics } = engine.query(params);
+        resolve({
+          success: true,
+          transactions,
+          totalMatching,
+          metrics,
+          appliedFilters: params
+        });
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    let timer: NodeJS.Timeout | undefined;
     const abortHandler = () => {
+      if (timer) clearTimeout(timer);
       reject(new DOMException('Query aborted', 'AbortError'));
     };
 
@@ -34,6 +56,12 @@ export function executeQueryTransactions(
       const { transactions, totalMatching, metrics } = engine.query(params);
 
       // Clean up abort listener
+    if (toolDelay > 0) {
+      timer = setTimeout(() => {
+        signal?.removeEventListener('abort', abortHandler);
+        execute();
+      }, toolDelay);
+    } else {
       signal?.removeEventListener('abort', abortHandler);
 
       resolve({
@@ -46,6 +74,7 @@ export function executeQueryTransactions(
     } catch (err) {
       signal?.removeEventListener('abort', abortHandler);
       reject(err);
+      execute();
     }
   });
 }
