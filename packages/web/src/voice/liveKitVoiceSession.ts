@@ -1,4 +1,3 @@
-import { ConnectionState, Room, RoomEvent } from 'livekit-client';
 import { ConnectionState, RemoteTrack, Room, RoomEvent, Track } from 'livekit-client';
 
 export type BrowserVoiceSessionState =
@@ -37,7 +36,6 @@ export class LiveKitVoiceSession {
     }
 
     this.transition('connecting');
-    const room = new Room();
     const room = new Room({
       adaptiveStream: true,
       dynacast: true

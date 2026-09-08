@@ -13,7 +13,6 @@ export interface UseLiveKitVoiceSessionResult {
   disconnect: () => Promise<void>;
 }
 
-export function useLiveKitVoiceSession(): UseLiveKitVoiceSessionResult {
 export function useLiveKitVoiceSession(
   callbacks: Pick<BrowserVoiceSessionCallbacks, 'onDataReceived'> = {}
 ): UseLiveKitVoiceSessionResult {
@@ -24,7 +23,6 @@ export function useLiveKitVoiceSession(
   if (!sessionRef.current) {
     sessionRef.current = new LiveKitVoiceSession({
       onStateChange: setState,
-      onError: setError
       onError: setError,
       onDataReceived: (data) => {
         callbacks.onDataReceived?.(data);

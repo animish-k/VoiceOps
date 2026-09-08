@@ -6,7 +6,6 @@ export type AgentEventType =
   | 'tool_aborted'
   | 'stale_result_discarded'
   | 'state_commit'
-  | 'response_generated';
   | 'response_generated'
   | 'voice_session_started'
   | 'voice_session_connected'
@@ -129,7 +128,6 @@ export type AgentEvent =
   | ToolAbortedEvent
   | StaleResultDiscardedEvent
   | StateCommitEvent
-  | ResponseGeneratedEvent;
   | ResponseGeneratedEvent
   | VoiceSessionEvent
   | SttEvent
@@ -148,13 +146,11 @@ export class AgentEventLogger {
   }
 
   public emit(event: AgentEvent): void {
-    this.eventHistory.push(event);
     // Redact any potential credentials/secrets before recording/emitting
     const sanitized = this.sanitizeEvent(event);
     this.eventHistory.push(sanitized);
     for (const listener of this.listeners) {
       try {
-        listener(event);
         listener(sanitized);
       } catch (err) {
         console.error('Error in agent event listener:', err);
@@ -178,7 +174,7 @@ export class AgentEventLogger {
     // Ensure no secrets like RIME_API_KEY or LIVEKIT_API_SECRET leak
     const clone = { ...event } as Record<string, unknown>;
     for (const key of ['apiKey', 'apiSecret', 'secret', 'token', 'password', 'key']) {
-      if (key in clone) {
+      if (key in clone && typeof clone[key] === 'string') {
         clone[key] = '[REDACTED]';
       }
     }

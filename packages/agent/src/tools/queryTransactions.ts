@@ -52,10 +52,6 @@ export function executeQueryTransactions(
 
     signal?.addEventListener('abort', abortHandler, { once: true });
 
-    try {
-      const { transactions, totalMatching, metrics } = engine.query(params);
-
-      // Clean up abort listener
     if (toolDelay > 0) {
       timer = setTimeout(() => {
         signal?.removeEventListener('abort', abortHandler);
@@ -63,17 +59,6 @@ export function executeQueryTransactions(
       }, toolDelay);
     } else {
       signal?.removeEventListener('abort', abortHandler);
-
-      resolve({
-        success: true,
-        transactions,
-        totalMatching,
-        metrics,
-        appliedFilters: params
-      });
-    } catch (err) {
-      signal?.removeEventListener('abort', abortHandler);
-      reject(err);
       execute();
     }
   });
