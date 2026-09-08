@@ -1,0 +1,23 @@
+{
+  "name": "@voiceops/agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@livekit/agents": "^1.8.0",
+    "@livekit/agents-plugin-rime": "^1.8.0",
+    "@livekit/rtc-node": "^0.13.34",
+    "dotenv": "^17.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "typescript": "^5.4.5"
+  }
+}

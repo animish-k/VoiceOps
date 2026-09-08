@@ -1,18 +1,79 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mic, MicOff, Volume2, Sparkles, FastForward } from 'lucide-react';
 import { dashboardStore, useDashboardState } from '../state/useDashboardStore.js';
+import { useLiveKitVoiceSession } from '../voice/useLiveKitVoiceSession.js';
+
+type VoiceMode = 'live' | 'simulation';
+
+interface VoiceTokenResponse {
+  token: string;
+  livekitUrl?: string;
+}
 
 export const VoiceWidget: React.FC = () => {
   const { assistantStatus, lastUpdatedTurnId } = useDashboardState();
-  const [isMicActive, setIsMicActive] = useState(false);
+  const [mode, setMode] = useState<VoiceMode>('simulation');
+  const [isSimulationMicActive, setIsSimulationMicActive] = useState(false);
+  const [connectionError, setConnectionError] = useState<Error>();
+  const { state: liveState, error: liveError, connect, disconnect } = useLiveKitVoiceSession();
 
-  const toggleMic = () => {
-    const nextState = !isMicActive;
-    setIsMicActive(nextState);
+  const isLiveMicActive = liveState === 'connecting'
+    || liveState === 'connected'
+    || liveState === 'listening'
+    || liveState === 'reconnecting';
+  const isMicActive = mode === 'live' ? isLiveMicActive : isSimulationMicActive;
+
+  useEffect(() => {
+    if (mode !== 'live') {
+      return;
+    }
+
     dashboardStore.setAssistantStatus({
-      isListening: nextState
+      isListening: liveState === 'listening' || liveState === 'reconnecting'
     });
+  }, [liveState, mode]);
+
+  const requestVoiceToken = async (): Promise<VoiceTokenResponse> => {
+    const apiUrl = import.meta.env.VITE_API_URL ?? '';
+    const response = await fetch(`${apiUrl}/api/livekit/token`);
+    if (!response.ok) {
+      throw new Error(`Voice token request failed (${response.status})`);
+    }
+
+    const payload = await response.json() as VoiceTokenResponse;
+    if (!payload.token) {
+      throw new Error('Voice token response did not include a token');
+    }
+    return payload;
   };
+
+  const toggleMic = async () => {
+    setConnectionError(undefined);
+    if (mode === 'simulation') {
+      const nextState = !isSimulationMicActive;
+      setIsSimulationMicActive(nextState);
+      dashboardStore.setAssistantStatus({ isListening: nextState });
+      return;
+    }
+
+    if (isLiveMicActive) {
+      await disconnect();
+      return;
+    }
+
+    try {
+      const tokenResponse = await requestVoiceToken();
+      const livekitUrl = tokenResponse.livekitUrl ?? import.meta.env.VITE_LIVEKIT_URL;
+      if (!livekitUrl) {
+        throw new Error('VITE_LIVEKIT_URL is required for live voice');
+      }
+      await connect({ livekitUrl, token: tokenResponse.token });
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error : new Error(String(error)));
+    }
+  };
+
+  const displayedError = connectionError ?? liveError;
 
   const handleSimulateTurn1 = () => {
     const nextTurn = lastUpdatedTurnId + 1;
@@ -85,11 +146,13 @@ export const VoiceWidget: React.FC = () => {
             <div className="flex items-center space-x-2">
               <span className="text-sm font-bold text-white">Voice Copilot Engine</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                Rime TTS Ready
+                {mode === 'live' ? 'LIVE VOICE' : 'SIMULATION'}
               </span>
             </div>
             <p className="text-xs text-ops-muted mt-0.5">
-              {isMicActive ? 'Listening to voice stream... (LiveKit WebRTC)' : 'Click microphone to begin voice session'}
+              {mode === 'live'
+                ? displayedError?.message ?? (isMicActive ? `LiveKit: ${liveState}` : 'Start a LiveKit voice session')
+                : isMicActive ? 'Simulation microphone active' : 'Demo mode: no microphone connection'}
             </p>
           </div>
         </div>
@@ -115,16 +178,44 @@ export const VoiceWidget: React.FC = () => {
         </div>
       </div>
 
+      <div className="mt-4 flex items-center gap-2 border-t border-ops-border/60 pt-4">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ops-muted">Voice path</span>
+        <button
+          onClick={() => setMode('live')}
+          className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+            mode === 'live'
+              ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+              : 'border-ops-border bg-ops-bg text-ops-muted hover:text-gray-200'
+          }`}
+        >
+          LIVE VOICE
+        </button>
+        <button
+          onClick={() => {
+            void disconnect();
+            setMode('simulation');
+          }}
+          className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+            mode === 'simulation'
+              ? 'border-blue-400/40 bg-blue-500/10 text-blue-300'
+              : 'border-ops-border bg-ops-bg text-ops-muted hover:text-gray-200'
+          }`}
+        >
+          SIMULATION / DEMO
+        </button>
+      </div>
+
       {/* Quick Interactive Scenario Simulator */}
       <div className="mt-4 pt-4 border-t border-ops-border/60 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2 text-xs text-ops-muted">
           <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-          <span>Quick Scenario Triggers:</span>
+          <span>Simulation-only scenario triggers:</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleSimulateTurn1}
+            disabled={mode !== 'simulation'}
             className="flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 border border-ops-border transition-colors"
           >
             <span>1. "Show failed transactions from Bangalore"</span>
@@ -132,6 +223,7 @@ export const VoiceWidget: React.FC = () => {
 
           <button
             onClick={handleSimulateTurn2Interruption}
+            disabled={mode !== 'simulation'}
             className="flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
           >
             <FastForward className="w-3.5 h-3.5" />
