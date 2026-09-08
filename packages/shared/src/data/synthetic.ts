@@ -184,11 +184,17 @@ export function querySyntheticTransactions(
   let filtered = dataset;
 
   if (params.region) {
-    filtered = filtered.filter(tx => tx.region.toLowerCase() === params.region?.toLowerCase());
+    const regions = Array.isArray(params.region)
+      ? params.region.map(r => r.toLowerCase())
+      : [params.region.toLowerCase()];
+    filtered = filtered.filter(tx => regions.includes(tx.region.toLowerCase()));
   }
 
   if (params.status) {
-    filtered = filtered.filter(tx => tx.status === params.status);
+    const statuses = Array.isArray(params.status)
+      ? params.status
+      : [params.status];
+    filtered = filtered.filter(tx => statuses.includes(tx.status));
   }
 
   if (typeof params.minAmount === 'number') {
@@ -199,8 +205,40 @@ export function querySyntheticTransactions(
     filtered = filtered.filter(tx => tx.amount <= (params.maxAmount ?? Infinity));
   }
 
+  if (params.merchantId) {
+    const merchantIds = Array.isArray(params.merchantId)
+      ? params.merchantId.map(m => m.toLowerCase())
+      : [params.merchantId.toLowerCase()];
+    filtered = filtered.filter(tx => merchantIds.includes(tx.merchantId.toLowerCase()));
+  }
+
+  if (params.timeRange) {
+    if (params.timeRange.hours) {
+      const cutoff = Date.now() - params.timeRange.hours * 3600 * 1000;
+      filtered = filtered.filter(tx => new Date(tx.timestamp).getTime() >= cutoff);
+    }
+    if (params.timeRange.start) {
+      const startTime = new Date(params.timeRange.start).getTime();
+      filtered = filtered.filter(tx => new Date(tx.timestamp).getTime() >= startTime);
+    }
+    if (params.timeRange.end) {
+      const endTime = new Date(params.timeRange.end).getTime();
+      filtered = filtered.filter(tx => new Date(tx.timestamp).getTime() <= endTime);
+    }
+  }
+
   if (params.paymentMethod) {
     filtered = filtered.filter(tx => tx.paymentMethod === params.paymentMethod);
+  }
+
+  if (params.searchQuery) {
+    const q = params.searchQuery.toLowerCase();
+    filtered = filtered.filter(tx =>
+      tx.id.toLowerCase().includes(q) ||
+      tx.merchantId.toLowerCase().includes(q) ||
+      (tx.errorCode && tx.errorCode.toLowerCase().includes(q)) ||
+      (tx.errorMessage && tx.errorMessage.toLowerCase().includes(q))
+    );
   }
 
   const totalMatching = filtered.length;

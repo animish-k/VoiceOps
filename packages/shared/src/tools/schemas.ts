@@ -1,10 +1,16 @@
 import { SupportedRegion, TransactionStatus } from '../types/domain.js';
 
 export interface QueryTransactionsParams {
-  region?: SupportedRegion;
-  status?: TransactionStatus;
+  region?: SupportedRegion | SupportedRegion[];
+  status?: TransactionStatus | TransactionStatus[];
   minAmount?: number;
   maxAmount?: number;
+  merchantId?: string | string[];
+  timeRange?: {
+    start?: string;
+    end?: string;
+    hours?: number;
+  };
   paymentMethod?: 'UPI' | 'CREDIT_CARD' | 'NET_BANKING' | 'WALLET';
   searchQuery?: string;
   limit?: number;
