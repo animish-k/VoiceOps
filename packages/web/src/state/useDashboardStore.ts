@@ -45,6 +45,7 @@ export interface DashboardStoreState extends DashboardState {
   // Store Actions
   applySnapshot: (snapshot: DashboardState, turnId: number) => boolean;
   applyPatch: (patch: Partial<DashboardState>, turnId: number) => boolean;
+  applyTurnUpdate: (turnId: number, update: Partial<DashboardState>) => boolean;
   setAssistantStatus: (status: Partial<DashboardState['assistantStatus']>) => void;
   setTranscript: (role: 'user' | 'assistant', text: string, isFinal: boolean, turnId: number) => boolean;
   handleTurnInterrupted: (supersededTurnId: number, newTurnId: number, reason?: string) => void;
@@ -186,6 +187,10 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       };
     });
     return true;
+  },
+
+  applyTurnUpdate: (turnId: number, update: Partial<DashboardState>): boolean => {
+    return get().applyPatch(update, turnId);
   },
 
   setAssistantStatus: (status: Partial<DashboardState['assistantStatus']>) => {
@@ -458,6 +463,7 @@ export const dashboardStore = {
   getState: () => useDashboardStore.getState(),
   applySnapshot: (snapshot: DashboardState, turnId: number) => useDashboardStore.getState().applySnapshot(snapshot, turnId),
   applyPatch: (patch: Partial<DashboardState>, turnId: number) => useDashboardStore.getState().applyPatch(patch, turnId),
+  applyTurnUpdate: (turnId: number, update: Partial<DashboardState>) => useDashboardStore.getState().applyTurnUpdate(turnId, update),
   setFilters: (turnId: number, filters: DashboardFilterState) => useDashboardStore.getState().setFilters(turnId, filters),
   resetFilters: (turnId?: number) => useDashboardStore.getState().resetFilters(turnId),
   setAssistantStatus: (status: Partial<DashboardState['assistantStatus']>) => useDashboardStore.getState().setAssistantStatus(status),

@@ -18,7 +18,7 @@ test('loads the verified default Rime configuration', () => {
     language: 'en',
     transport: 'websocket',
     audioFormat: 'pcm',
-    sampleRate: 16000,
+    sampleRate: 24000,
     segment: 'bySentence'
   });
 });
