@@ -49,9 +49,7 @@ export default defineAgent({
     });
 
     const agent = new voice.Agent({
-      instructions: 'You are VoiceOps, an expert operations analytics assistant helping investigate transaction failures and incidents. Provide concise, accurate summaries of filtered results.',
-      stt: createVoiceStt(),
-      tts: rimeTts
+      instructions: 'You are VoiceOps, an expert operations analytics assistant helping investigate transaction failures and incidents. Provide concise, accurate summaries of filtered results.'
     });
 
     // Handle user turn completion from STT
@@ -68,23 +66,54 @@ export default defineAgent({
       // Process utterance through authoritative backend AgentCoordinator
       const result = await coordinator.processUtterance(userUtterance);
 
-      if (result.isAuthoritative && result.spokenText) {
-        fence.setAuthoritativeTurn(result.turnId);
+console.log('[VoiceOps] coordinator result:', {
+  turnId: result.turnId,
+  requestId: result.requestId,
+  isAuthoritative: result.isAuthoritative,
+  hasState: Boolean(result.state),
+  spokenText: result.spokenText
+});
 
-        // Broadcast authoritative state update via room data channel
-        if (result.state && ctx.room?.localParticipant) {
-          try {
-            const payload = JSON.stringify({
-              type: 'state_commit',
-              turnId: result.turnId,
-              state: result.state
-            });
-            await ctx.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
-          } catch (pubErr) {
-            console.error('Failed to publish state via data channel:', pubErr);
-          }
-        }
+if (result.isAuthoritative && result.spokenText) {
+  console.log('[VoiceOps] result is authoritative');
 
+  fence.setAuthoritativeTurn(result.turnId);
+
+  // Broadcast authoritative state update via room data channel
+  if (result.state && ctx.room?.localParticipant) {
+    try {
+      console.log('[VoiceOps] publishing state_commit:', {
+        turnId: result.turnId,
+        state: result.state
+      });
+
+      const payload = JSON.stringify({
+        type: 'state_commit',
+        turnId: result.turnId,
+        state: result.state
+      });
+
+      await ctx.room.localParticipant.publishData(
+        new TextEncoder().encode(payload),
+        { reliable: true }
+      );
+
+      console.log('[VoiceOps] state_commit published successfully');
+    } catch (pubErr) {
+      console.error(
+        '[VoiceOps] Failed to publish state via data channel:',
+        pubErr
+      );
+    }
+  } else {
+    console.warn('[VoiceOps] state_commit NOT published:', {
+      hasState: Boolean(result.state),
+      hasRoom: Boolean(ctx.room),
+      hasLocalParticipant: Boolean(ctx.room?.localParticipant)
+    });
+  }
+
+  // Rime speech continues below...
         // Emit speech via fenced Rime coordinator
         await speechCoordinator.speak(
   {

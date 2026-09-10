@@ -51,11 +51,39 @@ export const VoiceWidget: React.FC = () => {
     disconnect
   } = useLiveKitVoiceSession({
     onDataReceived: (data: unknown) => {
-      const payload = data as Record<string, any>;
-      if (payload && payload.type) {
-        processIncomingEvent(payload as any);
-      }
+  const payload = data as Record<string, any>;
+
+  if (!payload || !payload.type) {
+    return;
+  }
+
+  console.log('[VoiceOps UI] Data received:', payload);
+
+  // Backend sends authoritative dashboard state as `state_commit`.
+  // Convert it to the event format already supported by the dashboard store.
+  if (payload.type === 'state_commit') {
+    if (!payload.state || typeof payload.turnId !== 'number') {
+      console.warn('[VoiceOps UI] Invalid state_commit:', payload);
+      return;
     }
+
+    console.log('[VoiceOps UI] Applying state_commit:', {
+      turnId: payload.turnId,
+      transactionCount: payload.state.transactions?.length,
+      totalMatchingCount: payload.state.totalMatchingCount
+    });
+
+    processIncomingEvent({
+      type: 'STATE_SNAPSHOT',
+      turnId: payload.turnId,
+      payload: payload.state
+    } as any);
+
+    return;
+  }
+
+  processIncomingEvent(payload as any);
+}
   });
 
   const isLiveMicActive =

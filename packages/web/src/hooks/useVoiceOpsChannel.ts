@@ -32,22 +32,53 @@ export function useVoiceOpsChannel() {
   );
 
   const processIncomingMessage = useCallback(
-    (rawMessage: string): boolean => {
-      try {
-        const parsed = JSON.parse(rawMessage) as DataChannelEvent;
-        if (!parsed || !parsed.type) {
-          console.warn('[VoiceOps Channel] Malformed message received:', rawMessage);
-          return false;
-        }
-        return processIncomingEvent(parsed);
-      } catch (err) {
-        console.error('[VoiceOps Channel] Failed to parse JSON message:', err, rawMessage);
+  (rawMessage: string): boolean => {
+    try {
+      const parsed = JSON.parse(rawMessage);
+
+      if (!parsed || !parsed.type) {
+        console.warn(
+          '[VoiceOps Channel] Malformed message received:',
+          rawMessage
+        );
         return false;
       }
-    },
-    [processIncomingEvent]
-  );
 
+      // Backend publishes authoritative dashboard updates as `state_commit`.
+      // Convert them into the frontend's existing STATE_SNAPSHOT event.
+      if (parsed.type === 'state_commit') {
+        console.log('[VoiceOps Channel] Received state_commit:', {
+          turnId: parsed.turnId,
+          hasState: Boolean(parsed.state)
+        });
+
+        if (!parsed.state || typeof parsed.turnId !== 'number') {
+          console.warn(
+            '[VoiceOps Channel] Invalid state_commit:',
+            parsed
+          );
+          return false;
+        }
+
+        return processIncomingEvent({
+          type: 'STATE_SNAPSHOT',
+          turnId: parsed.turnId,
+          payload: parsed.state
+        } as DataChannelEvent);
+      }
+
+      return processIncomingEvent(parsed as DataChannelEvent);
+    } catch (err) {
+      console.error(
+        '[VoiceOps Channel] Failed to parse JSON message:',
+        err,
+        rawMessage
+      );
+      return false;
+    }
+  },
+  [processIncomingEvent]
+);
   return {
     processIncomingEvent,
     processIncomingMessage,

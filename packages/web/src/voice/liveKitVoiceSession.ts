@@ -46,8 +46,29 @@ export class LiveKitVoiceSession {
     try {
       await room.connect(options.livekitUrl, options.token);
       this.transition('connected');
-      await room.localParticipant.setMicrophoneEnabled(true);
-      this.transition('listening');
+      const publication = await room.localParticipant.setMicrophoneEnabled(true);
+
+console.log('[VoiceOps] microphone enabled:', room.localParticipant.isMicrophoneEnabled);
+console.log('[VoiceOps] microphone publication:', publication);
+console.log('[VoiceOps] microphone track:', publication?.track);
+console.log('[VoiceOps] microphone track enabled:', publication?.track?.mediaStreamTrack?.enabled);
+console.log('[VoiceOps] microphone track readyState:', publication?.track?.mediaStreamTrack?.readyState);
+
+const audioLevelTimer = window.setInterval(() => {
+  if (!this.room) {
+    window.clearInterval(audioLevelTimer);
+    return;
+  }
+
+  console.log(
+    '[VoiceOps] mic audio level:',
+    room.localParticipant.audioLevel,
+    'speaking:',
+    room.localParticipant.isSpeaking
+  );
+}, 1000);
+
+this.transition('listening');
     } catch (error) {
       await this.disconnect();
       const normalizedError = error instanceof Error ? error : new Error(String(error));
