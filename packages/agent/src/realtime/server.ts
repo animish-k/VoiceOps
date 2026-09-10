@@ -1,6 +1,8 @@
+import { config as loadEnv } from 'dotenv';
 import http from 'node:http';
 import { loadVoiceOpsConfig } from '../config.js';
 import { issueBrowserVoiceToken } from './token.js';
+loadEnv({ path: '../../.env' });
 
 export interface TokenServerOptions {
   port?: number;

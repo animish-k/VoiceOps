@@ -10,7 +10,7 @@ export function createRimeTts(config: VoiceOpsConfig): rime.TTS {
     apiKey: config.rimeApiKey,
     lang: config.rime.language,
     samplingRate: config.rime.sampleRate,
-    useWebsocket: config.rime.transport === 'websocket',
+    useWebsocket: false,
     segment: config.rime.segment
   };
 

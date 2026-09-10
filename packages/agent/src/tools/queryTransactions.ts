@@ -19,19 +19,30 @@ export function executeQueryTransactions(
   signal?: AbortSignal
 ): Promise<QueryTransactionsResult> {
   return new Promise((resolve, reject) => {
-    // Check if aborted before running
     if (signal?.aborted) {
       return reject(new DOMException('Query aborted', 'AbortError'));
     }
 
     const toolDelay = parseInt(process.env.VOICEOPS_TOOL_DELAY_MS || '0', 10);
+    let timer: NodeJS.Timeout | undefined;
+
+    const abortHandler = () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      reject(new DOMException('Query aborted', 'AbortError'));
+    };
 
     const execute = () => {
       if (signal?.aborted) {
         return reject(new DOMException('Query aborted', 'AbortError'));
       }
+
       try {
         const { transactions, totalMatching, metrics } = engine.query(params);
+
+        signal?.removeEventListener('abort', abortHandler);
+
         resolve({
           success: true,
           transactions,
@@ -40,30 +51,23 @@ export function executeQueryTransactions(
           appliedFilters: params
         });
       } catch (err) {
+        signal?.removeEventListener('abort', abortHandler);
         reject(err);
       }
-    };
-
-    let timer: NodeJS.Timeout | undefined;
-    const abortHandler = () => {
-      if (timer) clearTimeout(timer);
-      reject(new DOMException('Query aborted', 'AbortError'));
     };
 
     signal?.addEventListener('abort', abortHandler, { once: true });
 
     if (toolDelay > 0) {
       timer = setTimeout(() => {
-        signal?.removeEventListener('abort', abortHandler);
+        timer = undefined;
         execute();
       }, toolDelay);
     } else {
-      signal?.removeEventListener('abort', abortHandler);
       execute();
     }
   });
 }
-
 export const QUERY_TRANSACTIONS_SCHEMA = {
   name: 'query_transactions',
   description: 'Query, filter, and aggregate transactions based on region, status, amount thresholds, merchant, and timeframe.',
