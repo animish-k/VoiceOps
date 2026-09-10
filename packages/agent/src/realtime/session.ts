@@ -1,7 +1,7 @@
 import type { JobContext } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import { VoiceOpsConfig, VoiceSessionState } from '../config.js';
-import { createRimeTts } from '../providers/rime.js';
+import { createVoiceSession, createRimeTts } from '../providers/rime.js';
 import { createVoiceStt } from '../providers/stt.js';
 import { VoiceOutputFence } from '../voice/outputFence.js';
 import { RimeSpeechCoordinator } from '../voice/speechCoordinator.js';
@@ -36,9 +36,9 @@ export async function startVoiceSession(
   context: JobContext,
   config: VoiceOpsConfig,
   agent: voice.Agent,
+  lifecycle: VoiceSessionLifecycle = { state: 'disconnected' },
   options: VoiceSessionOptions = {}
 ): Promise<VoiceSessionHandle> {
-  const lifecycle = options.lifecycle || { state: 'disconnected' };
   transition(lifecycle, 'connecting');
 
   const fence = options.fence || new VoiceOutputFence();

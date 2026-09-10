@@ -32,7 +32,7 @@ const defaultRimeConfig: RimeVoiceConfig = {
   language: 'en',
   transport: 'websocket',
   audioFormat: 'pcm',
-  sampleRate: 16000,
+  sampleRate: 24000,
   segment: 'bySentence'
 };
 

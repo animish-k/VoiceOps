@@ -1,4 +1,6 @@
-import { defineAgent, JobContext, voice } from '@livekit/agents';
+import { config as loadEnv } from 'dotenv';
+import { defineAgent, JobContext, voice, cli, ServerOptions } from '@livekit/agents';
+import { fileURLToPath } from 'node:url';
 import { loadVoiceOpsConfig } from '../config.js';
 import { AgentCoordinator } from '../AgentCoordinator.js';
 import { createRimeTts } from '../providers/rime.js';
@@ -7,6 +9,7 @@ import { VoiceOutputFence } from '../voice/outputFence.js';
 import { RimeSpeechCoordinator } from '../voice/speechCoordinator.js';
 import { attachSessionTelemetry, createLoggerVoiceTelemetrySink } from '../voice/sessionTelemetry.js';
 import { AgentEventLogger } from '../observability/EventLogger.js';
+loadEnv({ path: '../../.env' });
 
 export default defineAgent({
   entry: async (ctx: JobContext) => {
@@ -26,7 +29,14 @@ export default defineAgent({
     // Create STT and TTS session
     const session = new voice.AgentSession({
       stt: createVoiceStt(),
-      tts: rimeTts
+      tts: rimeTts,
+      turnHandling: {
+    endpointing: {
+      mode: 'fixed',
+      minDelay: 300,
+      maxDelay: 1800
+    }
+  }
     });
 
     attachSessionTelemetry(session, telemetrySink);
@@ -46,7 +56,7 @@ export default defineAgent({
 
     // Handle user turn completion from STT
     agent.onUserTurnCompleted = async (_chatCtx, newMessage) => {
-      const userUtterance = typeof newMessage === 'string' ? newMessage : (newMessage as any)?.content || '';
+  const userUtterance = newMessage.textContent || '';
       if (!userUtterance || typeof userUtterance !== 'string' || userUtterance.trim().length === 0) {
         return;
       }
@@ -77,18 +87,17 @@ export default defineAgent({
 
         // Emit speech via fenced Rime coordinator
         await speechCoordinator.speak(
-          {
-            turnId: result.turnId,
-            requestId: result.requestId,
-            text: result.spokenText
-          },
-          async (packet) => {
-            // Audio packet delivered to session/room playback
-            if (packet.frame && ctx.room) {
-              // Frame handled by LiveKit output
-            }
-          }
-        );
+  {
+    turnId: result.turnId,
+    requestId: result.requestId,
+    text: result.spokenText
+  },
+  async (packet) => {
+    if (packet.frame && session.output.audio) {
+      await session.output.audio.captureFrame(packet.frame);
+    }
+  }
+);
       }
     };
 
@@ -96,7 +105,12 @@ export default defineAgent({
     await ctx.connect();
     await session.start({
       agent,
-      room: ctx.room
+      room: ctx.room,
+      outputOptions: {
+    audioEnabled: true,
+    audioSampleRate: 24000,
+    audioNumChannels: 1
+  }
     });
 
     logger.emit({
@@ -108,3 +122,6 @@ export default defineAgent({
   }
 });
 
+cli.runApp(new ServerOptions({
+  agent: fileURLToPath(import.meta.url)
+}));
